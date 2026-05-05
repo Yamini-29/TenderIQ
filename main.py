@@ -1,11 +1,10 @@
 from fastapi import FastAPI
-from routes import upload, evaluate
+from routes.evaluate import router as eval_router
 
-app = FastAPI(title="TenderIQ API")
+app = FastAPI()
 
-app.include_router(upload.router)
-app.include_router(evaluate.router)
+app.include_router(eval_router)
 
 @app.get("/")
 def home():
-    return {"message": "TenderIQ Backend Running"}
+    return {"message": "TenderIQ running"}
