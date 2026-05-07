@@ -2,61 +2,90 @@ import requests
 import json
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "mistral"
 
 
-def clean_json(text):
-    text = text.strip()
-
-    if "```" in text:
-        text = text.split("```")[1]
-
-    start = min([i for i in [text.find("{"), text.find("[")] if i != -1], default=0)
-    end = max(text.rfind("}"), text.rfind("]"))
-
-    if start != -1 and end != -1:
-        text = text[start:end+1]
-
-    return text
-
-
+# -----------------------------
+# LLM CALL
+# -----------------------------
 def call_llm(prompt):
-    res = requests.post(
+    response = requests.post(
         OLLAMA_URL,
-        json={"model": MODEL, "prompt": prompt, "stream": False}
+        json={
+            "model": "mistral",
+            "prompt": prompt,
+            "stream": False
+        }
     )
-    return clean_json(res.json()["response"])
+    return response.json()["response"]
 
 
-def safe_json(text):
-    try:
-        return json.loads(text)
-    except:
-        return []
+# -----------------------------
+# PROMPT
+# -----------------------------
+def build_bidder_prompt(text):
+    return f"""
+You are an AI system extracting structured information from bidder documents.
 
+Extract the following fields strictly:
 
-def extract_criteria_llm(text):
-    prompt = f"""
-Extract eligibility criteria as JSON list:
-[{{"criterion": "...", "type": "financial/technical/compliance", "confidence": 0.9}}]
+1. turnover (numeric, in INR)
+2. projects_completed (number)
+3. gst (Present / Not Present)
+4. certifications (ISO certifications like ISO 9001)
 
-TEXT:
-{text}
-"""
-    return safe_json(call_llm(prompt))
+IMPORTANT RULES:
+- If ISO 9001 appears in ANY form (ISO certified / ISO 9001 certified), return "ISO 9001"
+- If not found → "Not Provided"
+- ONLY return JSON
+- NO explanation
 
-
-def extract_bidder_llm(text):
-    prompt = f"""
-Extract bidder info as JSON:
+OUTPUT FORMAT:
 {{
- "turnover": {{"value": "...", "confidence": 0.9}},
- "projects_completed": {{"value": "...", "confidence": 0.9}},
- "gst": {{"value": "...", "confidence": 0.9}},
- "certifications": {{"value": "...", "confidence": 0.9}}
+    "turnover": "",
+    "projects_completed": "",
+    "gst": "",
+    "certifications": ""
 }}
 
-TEXT:
+DOCUMENT:
 {text}
 """
-    return safe_json(call_llm(prompt))
+
+
+# -----------------------------
+# FALLBACK FIX (CRITICAL)
+# -----------------------------
+def apply_fallbacks(bidder_text, data):
+    text = bidder_text.upper()
+
+    if "ISO" in text:
+        data["certifications"] = "ISO 9001"
+
+    if "GST" in text:
+        data["gst"] = "Present"
+
+    return data
+
+
+# -----------------------------
+# MAIN FUNCTION
+# -----------------------------
+def extract_bidder_llm(bidder_text):
+    prompt = build_bidder_prompt(bidder_text)
+
+    output = call_llm(prompt)
+
+    try:
+        data = json.loads(output)
+    except:
+        data = {
+            "turnover": "",
+            "projects_completed": "",
+            "gst": "",
+            "certifications": ""
+        }
+
+    # 🔥 APPLY FALLBACK
+    data = apply_fallbacks(bidder_text, data)
+
+    return data

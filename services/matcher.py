@@ -1,65 +1,87 @@
 import re
 
+
 def extract_number(text):
-    if text is None:
+    if not text:
         return None
-    nums = re.findall(r"\d+", str(text))
-    return int(nums[0]) if nums else None
+
+    nums = re.findall(r"\d+\.?\d*", text.replace(",", ""))
+    if nums:
+        return float(nums[0])
+    return None
 
 
-def evaluate(criteria, bidder):
+def match_turnover(criterion, value):
+    required = extract_number(criterion)
+    actual = extract_number(value)
+
+    if actual is None:
+        return "Needs Review", "Turnover not found"
+
+    if actual >= required:
+        return "Eligible", f"{actual} ≥ {required}"
+    return "Not Eligible", f"{actual} < {required}"
+
+
+def match_projects(criterion, value):
+    required = extract_number(criterion)
+    actual = extract_number(value)
+
+    if actual is None:
+        return "Needs Review", "Projects not found"
+
+    if actual >= required:
+        return "Eligible", f"{actual} ≥ {required}"
+    return "Not Eligible", f"{actual} < {required}"
+
+
+def match_gst(value):
+    if value and "present" in value.lower():
+        return "Eligible", "GST available"
+    return "Not Eligible", "GST missing"
+
+
+def match_iso(value):
+    if not value:
+        return "Needs Review", "Certification missing"
+
+    val = value.upper()
+
+    if "ISO" in val:
+        return "Eligible", "ISO certification present"
+
+    return "Not Eligible", "ISO missing"
+
+
+# -----------------------------
+# MAIN EVALUATOR
+# -----------------------------
+def evaluate(criteria, bidder_data):
     results = []
 
     for c in criteria:
-        text = c.get("criterion", "").lower()
-
-        decision = "Needs Review"
-        reason = "Unknown"
-        confidence = 0.5
-        value = None
-        required = None
+        text = c["criterion"].lower()
 
         if "turnover" in text:
-            value = bidder.get("turnover", {}).get("value")
-            confidence = bidder.get("turnover", {}).get("confidence", 0.5)
-            actual = extract_number(value)
-            required = extract_number(text)
+            decision, reason = match_turnover(text, bidder_data.get("turnover"))
 
         elif "project" in text:
-            value = bidder.get("projects_completed", {}).get("value")
-            confidence = bidder.get("projects_completed", {}).get("confidence", 0.5)
-            actual = extract_number(value)
-            required = extract_number(text)
+            decision, reason = match_projects(text, bidder_data.get("projects_completed"))
 
         elif "gst" in text:
-            value = bidder.get("gst", {}).get("value")
-            confidence = bidder.get("gst", {}).get("confidence", 0.5)
-            decision = "Eligible" if value else "Needs Review"
-            reason = "GST present" if value else "Missing GST"
+            decision, reason = match_gst(bidder_data.get("gst"))
+
+        elif "iso" in text:
+            decision, reason = match_iso(bidder_data.get("certifications"))
 
         else:
-            actual = None
-
-        if "turnover" in text or "project" in text:
-            if actual is None or required is None or confidence < 0.6:
-                decision = "Needs Review"
-                reason = "Low confidence"
-            elif actual >= required:
-                decision = "Eligible"
-                reason = f"{actual} >= {required}"
-            else:
-                decision = "Not Eligible"
-                reason = f"{actual} < {required}"
+            decision, reason = "Needs Review", "Unknown criterion"
 
         results.append({
-            "criterion": c.get("criterion"),
+            "criterion": c["criterion"],
             "decision": decision,
-            "confidence": confidence,
-            "explanation": {
-                "value": value,
-                "required": required,
-                "reason": reason
-            }
+            "reason": reason,
+            "confidence": 0.9 if decision != "Needs Review" else 0.6
         })
 
     return results
