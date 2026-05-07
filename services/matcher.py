@@ -1,55 +1,55 @@
-def evaluate(criteria, bidder_data):
+import re
+
+def extract_number(text):
+    if text is None:
+        return None
+    nums = re.findall(r"\d+", str(text))
+    return int(nums[0]) if nums else None
+
+
+def evaluate(criteria, bidder):
     results = []
 
     for c in criteria:
-        criterion_text = c.get("criterion", "").lower()
+        text = c.get("criterion", "").lower()
 
         decision = "Needs Review"
-        reason = "Insufficient data"
+        reason = "Unknown"
         confidence = 0.5
-        value = ""
+        value = None
+        required = None
 
-        # TURNOVER
-        if "turnover" in criterion_text:
-            value = bidder_data.get("turnover", {}).get("value", "")
-            confidence = bidder_data.get("turnover", {}).get("confidence", 0.5)
+        if "turnover" in text:
+            value = bidder.get("turnover", {}).get("value")
+            confidence = bidder.get("turnover", {}).get("confidence", 0.5)
+            actual = extract_number(value)
+            required = extract_number(text)
 
-            if not value or "unclear" in value.lower() or confidence < 0.6:
+        elif "project" in text:
+            value = bidder.get("projects_completed", {}).get("value")
+            confidence = bidder.get("projects_completed", {}).get("confidence", 0.5)
+            actual = extract_number(value)
+            required = extract_number(text)
+
+        elif "gst" in text:
+            value = bidder.get("gst", {}).get("value")
+            confidence = bidder.get("gst", {}).get("confidence", 0.5)
+            decision = "Eligible" if value else "Needs Review"
+            reason = "GST present" if value else "Missing GST"
+
+        else:
+            actual = None
+
+        if "turnover" in text or "project" in text:
+            if actual is None or required is None or confidence < 0.6:
                 decision = "Needs Review"
-                reason = "Turnover data unclear"
-            elif "6" in value or "7" in value:
+                reason = "Low confidence"
+            elif actual >= required:
                 decision = "Eligible"
-                reason = "Turnover satisfies requirement"
+                reason = f"{actual} >= {required}"
             else:
                 decision = "Not Eligible"
-                reason = "Turnover below requirement"
-
-        # PROJECTS
-        elif "project" in criterion_text:
-            value = bidder_data.get("projects_completed", {}).get("value", "")
-            confidence = bidder_data.get("projects_completed", {}).get("confidence", 0.5)
-
-            if not value or confidence < 0.6:
-                decision = "Needs Review"
-                reason = "Project data unclear"
-            elif "5" in value or "4" in value:
-                decision = "Eligible"
-                reason = "Sufficient projects completed"
-            else:
-                decision = "Not Eligible"
-                reason = "Insufficient projects"
-
-        # GST
-        elif "gst" in criterion_text:
-            value = bidder_data.get("gst", {}).get("value", "")
-            confidence = bidder_data.get("gst", {}).get("confidence", 0.5)
-
-            if not value:
-                decision = "Needs Review"
-                reason = "GST missing"
-            else:
-                decision = "Eligible"
-                reason = "GST present"
+                reason = f"{actual} < {required}"
 
         results.append({
             "criterion": c.get("criterion"),
@@ -57,6 +57,7 @@ def evaluate(criteria, bidder_data):
             "confidence": confidence,
             "explanation": {
                 "value": value,
+                "required": required,
                 "reason": reason
             }
         })
