@@ -78,8 +78,8 @@ tesseract --version
 ## 1️⃣ Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd tenderiq
+git clone https://github.com/Yamini-29/TenderIQ/
+cd TenderIQ
 ```
 
 ---
