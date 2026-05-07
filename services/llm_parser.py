@@ -70,6 +70,41 @@ def apply_fallbacks(bidder_text, data):
 # -----------------------------
 # MAIN FUNCTION
 # -----------------------------
+# -----------------------------
+# CRITERIA EXTRACTION (FIX)
+# -----------------------------
+def extract_criteria_llm(tender_text):
+
+    prompt = f"""
+Extract eligibility criteria from the following tender.
+
+Classify each into:
+- financial
+- technical
+- compliance
+
+Return JSON:
+
+[
+  {{
+    "criterion": "...",
+    "type": "...",
+    "mandatory": true
+  }}
+]
+
+TENDER:
+{tender_text}
+"""
+
+    output = call_llm(prompt)
+
+    try:
+        import json
+        return json.loads(output)
+    except:
+        return []
+    
 def extract_bidder_llm(bidder_text):
     prompt = build_bidder_prompt(bidder_text)
 
